@@ -8,7 +8,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDGV7zuMVdeElwXX_dpVfX6J-V9Sx0zxNc",
@@ -34,8 +34,6 @@
   // ── CARGA PRODUCTOS ────────────────────────────────────────────────────────
   const q = query(
     collection(db, "productos"),
-    where("disponible", "!=", false),
-    orderBy("disponible"),
     orderBy("createdAt", "desc")
   );
 
@@ -43,7 +41,10 @@
     productos = [];
     snap.forEach(d => {
       const p = { id: d.id, ...d.data() };
-      if ((parseInt(p.existencias) || 0) > 0) productos.push(p);
+      // Filtrar client-side: solo disponibles con stock > 0
+      if (p.disponible !== false && (parseInt(p.existencias) || 0) > 0) {
+        productos.push(p);
+      }
     });
     // Extraer categorías únicas
     categorias = [...new Set(productos.map(p => p.categoria).filter(Boolean))];
