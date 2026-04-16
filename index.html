@@ -8,7 +8,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDGV7zuMVdeElwXX_dpVfX6J-V9Sx0zxNc",
@@ -32,12 +32,7 @@
   let busqueda = '';
 
   // ── CARGA PRODUCTOS ────────────────────────────────────────────────────────
-  const q = query(
-    collection(db, "productos"),
-    orderBy("createdAt", "desc")
-  );
-
-  onSnapshot(q, snap => {
+  onSnapshot(collection(db, "productos"), snap => {
     productos = [];
     snap.forEach(d => {
       const p = { id: d.id, ...d.data() };
