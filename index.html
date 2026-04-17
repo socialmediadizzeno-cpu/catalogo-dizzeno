@@ -134,7 +134,9 @@ function filtrar(lista) {
 }
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
-function waIcon(){ return `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.528 5.845L0 24l6.335-1.505A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.371l-.36-.213-3.728.886.924-3.619-.234-.372A9.818 9.818 0 1112 21.818z"/></svg>`; }
+function waIcon(){ return `<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.528 5.845L0 24l6.335-1.505A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.371l-.36-.213-3.728.886.924-3.619-.234-.372A9.818 9.818 0 1112 21.818z"/></svg>`; }
+
+function shopIcon(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13" style="flex-shrink:0"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>`; }
 
 function render() {
   const lista  = filtrar(todos);
@@ -146,13 +148,16 @@ function render() {
   grid.className = vista==='grid' ? 'prod-grid' : 'prod-lista';
 
   grid.innerHTML = lista.map((p,i) => {
-    const s   = parseInt(p.existencias)||0;
-    const sc  = s>=5?'green':s>=2?'yellow':'red';
-    const st  = s===1?'1 pieza':`${s} piezas`;
-    const waMsg = encodeURIComponent(`Hola, vi *${p.nombre}* en el catálogo Dizzeño Art Glass. Hay ${s} en existencia. Me interesa, ¿está disponible?`);
-    const waUrl = `https://wa.me/${WA}?text=${waMsg}`;
+    const s      = parseInt(p.existencias)||0;
+    const sc     = s>=5?'green':s>=2?'yellow':'red';
+    const st     = s===1?'1 pieza':`${s} piezas`;
+    const waMsg  = encodeURIComponent(`Hola, vi *${p.nombre}* en el catálogo Dizzeño Art Glass. Hay ${s} en existencia. Me interesa, ¿está disponible?`);
+    const waUrl  = `https://wa.me/${WA}?text=${waMsg}`;
+    const shopBtn = p.urlShopify
+      ? `<a href="${p.urlShopify}" target="_blank" class="btn-shop" rel="noopener">${shopIcon()}Ver en tienda</a>`
+      : '';
     const precio = p.precio ? `<div class="c-precio">$${p.precio} MXN</div>` : '';
-    const foto = p.fotoUrl ? `<img src="${p.fotoUrl}" alt="${p.nombre}" class="c-img" loading="lazy" onerror="this.parentElement.classList.add('no-foto');this.remove()">` : '';
+    const foto   = p.fotoUrl ? `<img src="${p.fotoUrl}" alt="${p.nombre}" class="c-img" loading="lazy" onerror="this.parentElement.classList.add('no-foto');this.remove()">` : '';
 
     if(vista==='grid') return `
       <article class="prod-card" style="animation-delay:${Math.min(i*20,400)}ms">
@@ -167,7 +172,10 @@ function render() {
           ${precio}
           <div class="c-stock s-${sc}"><span class="dot-s dot-${sc}"></span>${st}</div>
           ${p.descripcion?`<div class="c-desc">${p.descripcion}</div>`:''}
-          <a href="${waUrl}" target="_blank" class="btn-wa" rel="noopener">${waIcon()}Quiero esto</a>
+          <div class="c-btns">
+            <a href="${waUrl}" target="_blank" class="btn-wa-min" rel="noopener">${waIcon()}Consultar</a>
+            ${shopBtn}
+          </div>
         </div>
       </article>`;
 
@@ -185,7 +193,10 @@ function render() {
             ${p.barrenado?'<span class="c-pill-inline">Lámpara</span>':''}
           </div>
         </div>
-        <a href="${waUrl}" target="_blank" class="btn-wa r-wa" rel="noopener">${waIcon()}Quiero esto</a>
+        <div class="r-btns">
+          <a href="${waUrl}" target="_blank" class="btn-wa-min" rel="noopener">${waIcon()}Consultar</a>
+          ${p.urlShopify?`<a href="${p.urlShopify}" target="_blank" class="btn-shop" rel="noopener">${shopIcon()}Ver en tienda</a>`:''}
+        </div>
       </article>`;
   }).join('');
 }
@@ -273,8 +284,13 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
 .dot-s{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .dot-green{background:var(--grn)}.dot-yellow{background:#C9A84C}.dot-red{background:var(--red)}
 .c-desc{font-size:11px;color:var(--txt2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.btn-wa{display:flex;align-items:center;justify-content:center;gap:.4rem;margin-top:auto;padding:.6rem .85rem;background:var(--wa);color:#fff;border:none;border-radius:var(--rs);font-family:var(--f);font-size:12px;font-weight:700;text-decoration:none;transition:background .15s,transform .1s}
-.btn-wa:hover{background:var(--wa-dk)}.btn-wa:active{transform:scale(.98)}
+.c-btns{display:flex;gap:.4rem;margin-top:auto;padding-top:.7rem}
+.btn-wa-min{display:flex;align-items:center;justify-content:center;gap:.35rem;flex:1;padding:.55rem .6rem;background:transparent;color:var(--txt2);border:1px solid var(--bdr);border-radius:var(--rs);font-family:var(--f);font-size:11.5px;font-weight:600;text-decoration:none;transition:all .15s;white-space:nowrap}
+.btn-wa-min:hover{border-color:var(--gold);color:var(--txt);background:rgba(196,168,130,.08)}
+.btn-shop{display:flex;align-items:center;justify-content:center;gap:.35rem;flex:1;padding:.55rem .6rem;background:var(--txt);color:var(--bg2);border:1px solid var(--txt);border-radius:var(--rs);font-family:var(--f);font-size:11.5px;font-weight:600;text-decoration:none;transition:all .15s;white-space:nowrap}
+.btn-shop:hover{background:var(--txt2);border-color:var(--txt2)}
+.r-btns{display:flex;flex-direction:column;gap:.35rem;flex-shrink:0}
+.r-btns .btn-wa-min,.r-btns .btn-shop{padding:.5rem .75rem;font-size:11px}
 
 /* LISTA */
 .prod-lista{display:flex;flex-direction:column;gap:.6rem}
@@ -294,7 +310,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
 
 @media(max-width:768px){
   .prod-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.75rem}
-  .r-wa{display:none}
+  .r-btns{display:none}
   .contador{display:none}
 }
 @media(max-width:480px){
