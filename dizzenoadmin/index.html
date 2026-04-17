@@ -471,7 +471,7 @@ function renderTable(){
     (!q     || (p.nombre||'').toLowerCase().includes(q)||(p.categoria||'').toLowerCase().includes(q)||(p.color||'').toLowerCase().includes(q)) &&
     (barr===''||(barr==='si'?p.barrenado:!p.barrenado)) &&
     (vis===''||(vis==='visible'?p.disponible!==false:p.disponible===false)) &&
-    (!color  || (p.color||''===color)) &&
+    (!color  || (p.color||'')===color) &&
     (foto===''||(foto==='si'?!!p.fotoUrl:!p.fotoUrl))
   );
   lista=getOrdenados(lista);
@@ -590,10 +590,11 @@ window.openEdit=id=>{
   const p=productos.find(x=>x.id===id); if(!p) return;
   editingProductId=id;
   document.getElementById('modalTitle').textContent='Editar producto';
+  resetImagenForm(); // reset primero, ANTES de asignar valores
   document.getElementById('prodNombre').value      =p.nombre||'';
   document.getElementById('prodCategoria').value   =p.categoria||'';
   document.getElementById('prodColor').value       =p.color||'';
-  document.getElementById('prodFotoUrl').value     =p.fotoUrl||'';
+  document.getElementById('prodFotoUrl').value     =p.fotoUrl||''; // se asigna después del reset
   document.getElementById('prodExistencias').value =p.existencias||0;
   document.getElementById('prodPrecio').value      =p.precio||'';
   document.getElementById('prodDescripcion').value =p.descripcion||'';
@@ -605,7 +606,6 @@ window.openEdit=id=>{
   document.getElementById('juegoPiezasRow').style.display=p.esJuego?'block':'none';
   document.getElementById('prodPiezasJuego').value =p.piezasJuego||'';
   if(p.camposExtra) customFields.forEach(c=>{const el=document.getElementById(`cf_${c.id}`);if(el&&p.camposExtra[c.id]!==undefined) el.type==='checkbox'?el.checked=p.camposExtra[c.id]:el.value=p.camposExtra[c.id];});
-  resetImagenForm();
   document.getElementById('prodModal').classList.add('open');
 };
 window.closeModal=()=>{ document.getElementById('prodModal').classList.remove('open'); editingProductId=null; detenerCamara(); };
