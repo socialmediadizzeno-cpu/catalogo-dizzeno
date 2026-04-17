@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dizzeño Art Glass — Catálogo</title>
 <link rel="icon" type="image/png" href="favicon%20negro.png">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet">
+<link id="googleFontLink" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet">
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDGV7zuMVdeElwXX_dpVfX6J-V9Sx0zxNc",
@@ -28,29 +28,50 @@ let todos = [], categorias = [], colores = [];
 let vista = 'grid';
 let filtros = { busqueda:'', categoria:'', color:'', barrenado:'', conFoto:'', orden:'az' };
 
-// ── CARGA EN TIEMPO REAL ───────────────────────────────────────────────────
-// Categorías
-const unsubCats = onSnapshot(collection(db,"categorias"), snap => {
+// ── TEMA DESDE FIREBASE ────────────────────────────────────────────────────
+onSnapshot(doc(db,"config","tema"), snap => {
+  if (!snap.exists()) return;
+  const t = snap.data();
+  const r = document.documentElement;
+  if (t.colorAcento)   r.style.setProperty('--gold', t.colorAcento);
+  if (t.colorBg)       r.style.setProperty('--bg',   t.colorBg);
+  if (t.colorBg2)      r.style.setProperty('--bg2',  t.colorBg2);
+  if (t.colorTxt)      r.style.setProperty('--txt',  t.colorTxt);
+  if (t.heroBg)        r.style.setProperty('--hero-bg', t.heroBg);
+  if (t.heroImagen)    { document.getElementById('heroBg').style.backgroundImage=`url(${t.heroImagen})`; document.getElementById('heroBg').style.opacity='1'; }
+  if (t.heroGradiente) r.style.setProperty('--hero-overlay', t.heroGradiente);
+  if (t.fontFamily) {
+    r.style.setProperty('--f', `'${t.fontFamily}',sans-serif`);
+    // Cargar la font desde Google Fonts
+    const link = document.getElementById('googleFontLink');
+    const encoded = t.fontFamily.replace(/ /g,'+');
+    link.href = `https://fonts.googleapis.com/css2?family=${encoded}:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap`;
+  }
+  if (t.heroTexto1) document.getElementById('heroTexto1').textContent = t.heroTexto1;
+  if (t.heroTexto2) document.getElementById('heroTexto2').textContent = t.heroTexto2;
+});
+
+// ── CATEGORÍAS EN TIEMPO REAL ──────────────────────────────────────────────
+onSnapshot(collection(db,"categorias"), snap => {
   categorias = [];
   snap.forEach(d => { if(d.data().publicada !== false) categorias.push({id:d.id,...d.data()}); });
   categorias.sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
   poblarCategorias();
 });
 
-// Colores
-const unsubColors = onSnapshot(collection(db,"colores"), snap => {
+// ── COLORES EN TIEMPO REAL ─────────────────────────────────────────────────
+onSnapshot(collection(db,"colores"), snap => {
   colores = [];
   snap.forEach(d => colores.push({id:d.id,...d.data()}));
   colores.sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
   poblarColores();
 });
 
-// Productos — en tiempo real
-const unsubProds = onSnapshot(collection(db,"productos"), snap => {
+// ── PRODUCTOS EN TIEMPO REAL ───────────────────────────────────────────────
+onSnapshot(collection(db,"productos"), snap => {
   todos = [];
   snap.forEach(d => {
     const p = { id:d.id,...d.data() };
-    // Solo mostrar publicados con stock > 0
     if (p.disponible !== false && (parseInt(p.existencias)||0) > 0) todos.push(p);
   });
   render();
@@ -60,8 +81,7 @@ const unsubProds = onSnapshot(collection(db,"productos"), snap => {
 
 // ── FILTROS ────────────────────────────────────────────────────────────────
 function poblarCategorias() {
-  const container = document.getElementById('filtrosCats');
-  if(!container) return;
+  const container = document.getElementById('filtrosCats'); if(!container) return;
   container.innerHTML =
     `<button class="filter-btn ${!filtros.categoria?'active':''}" onclick="setFiltro('categoria','')">Todas</button>` +
     categorias.map(c =>
@@ -134,14 +154,13 @@ function filtrar(lista) {
 }
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
-function waIcon(){ return `<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.528 5.845L0 24l6.335-1.505A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.371l-.36-.213-3.728.886.924-3.619-.234-.372A9.818 9.818 0 1112 21.818z"/></svg>`; }
-
+function waIcon(){ return `<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;color:#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.528 5.845L0 24l6.335-1.505A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.371l-.36-.213-3.728.886.924-3.619-.234-.372A9.818 9.818 0 1112 21.818z"/></svg>`; }
 function shopIcon(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13" style="flex-shrink:0"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>`; }
 
 function render() {
-  const lista  = filtrar(todos);
-  const grid   = document.getElementById('productosGrid');
-  const empty  = document.getElementById('emptyState');
+  const lista = filtrar(todos);
+  const grid  = document.getElementById('productosGrid');
+  const empty = document.getElementById('emptyState');
   document.getElementById('contador').textContent = `${lista.length} pieza${lista.length!==1?'s':''}`;
   if(!lista.length){ grid.innerHTML=''; empty.style.display='flex'; return; }
   empty.style.display='none';
@@ -153,14 +172,12 @@ function render() {
     const st     = s===1?'1 pieza':`${s} piezas`;
     const waMsg  = encodeURIComponent(`Hola, vi *${p.nombre}* en el catálogo Dizzeño Art Glass. Hay ${s} en existencia. Me interesa, ¿está disponible?`);
     const waUrl  = `https://wa.me/${WA}?text=${waMsg}`;
-    const shopBtn = p.urlShopify
-      ? `<a href="${p.urlShopify}" target="_blank" class="btn-shop" rel="noopener">${shopIcon()}Ver en tienda</a>`
-      : '';
-    const precio = p.precio ? `<div class="c-precio">$${p.precio} MXN</div>` : '';
-    const foto   = p.fotoUrl ? `<img src="${p.fotoUrl}" alt="${p.nombre}" class="c-img" loading="lazy" onerror="this.parentElement.classList.add('no-foto');this.remove()">` : '';
+    const shopBtn = p.urlShopify ? `<a href="${p.urlShopify}" target="_blank" class="btn-shop" rel="noopener">${shopIcon()}Ver en tienda</a>` : '';
+    const precio  = p.precio ? `<div class="c-precio">$${p.precio} MXN</div>` : '';
+    const foto    = p.fotoUrl ? `<img src="${p.fotoUrl}" alt="${p.nombre}" class="c-img" loading="lazy" onerror="this.parentElement.classList.add('no-foto');this.remove()">` : '';
 
     if(vista==='grid') return `
-      <article class="prod-card" style="animation-delay:${Math.min(i*20,400)}ms">
+      <article class="prod-card" style="animation-delay:${Math.min(i*25,500)}ms">
         <div class="c-img-wrap ${!p.fotoUrl?'no-foto':''}">${foto}
           <span class="c-dot dot-${sc}"></span>
           ${p.barrenado?'<span class="c-pill">Lámpara</span>':''}
@@ -173,7 +190,7 @@ function render() {
           <div class="c-stock s-${sc}"><span class="dot-s dot-${sc}"></span>${st}</div>
           ${p.descripcion?`<div class="c-desc">${p.descripcion}</div>`:''}
           <div class="c-btns">
-            <a href="${waUrl}" target="_blank" class="btn-wa-min" rel="noopener">${waIcon()}Consultar</a>
+            <a href="${waUrl}" target="_blank" class="btn-wa-min" rel="noopener">${waIcon()}Más info</a>
             ${shopBtn}
           </div>
         </div>
@@ -194,12 +211,29 @@ function render() {
           </div>
         </div>
         <div class="r-btns">
-          <a href="${waUrl}" target="_blank" class="btn-wa-min" rel="noopener">${waIcon()}Consultar</a>
+          <a href="${waUrl}" target="_blank" class="btn-wa-min" rel="noopener">${waIcon()}Más info</a>
           ${p.urlShopify?`<a href="${p.urlShopify}" target="_blank" class="btn-shop" rel="noopener">${shopIcon()}Ver en tienda</a>`:''}
         </div>
       </article>`;
   }).join('');
+
+  // Intersection Observer para animaciones al hacer scroll
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.prod-card,.prod-row').forEach(el => observer.observe(el));
+  });
 }
+
+// Scroll reveal observer
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.08 });
+
+// Scroll to top
+window.addEventListener('scroll', () => {
+  const btn = document.getElementById('topBtn');
+  btn.classList.toggle('show', window.scrollY > 400);
+});
+window.scrollTop = () => window.scrollTo({ top:0, behavior:'smooth' });
 </script>
 
 <style>
@@ -209,69 +243,190 @@ function render() {
   --txt:#111110;--txt2:#555450;--txt3:#99978F;
   --gold:#C4A882;--gold-lt:#D4BC9A;
   --grn:#3D8A52;--ylw:#9A7318;--red:#A03828;
-  --wa:#25D366;--wa-dk:#1DA851;
-  --f:'Plus Jakarta Sans',sans-serif;--r:12px;--rs:8px;
-  --sh:0 2px 12px rgba(0,0,0,.06);--sh-h:0 8px 28px rgba(0,0,0,.11);
+  --hero-bg:#111110;--hero-overlay:rgba(0,0,0,.45);
+  --f:'Plus Jakarta Sans',sans-serif;
+  --r:12px;--rs:8px;
+  --sh:0 2px 12px rgba(0,0,0,.06);--sh-h:0 8px 28px rgba(0,0,0,.12);
 }
 @media(prefers-color-scheme:dark){
-  :root{--bg:#111110;--bg2:#1A1A18;--bg3:#242422;--bdr:#2E2E2C;--txt:#F0EDE8;--txt2:#A09D98;--txt3:#606060;--sh:0 2px 12px rgba(0,0,0,.3);--sh-h:0 8px 28px rgba(0,0,0,.5)}
+  :root{--bg:#111110;--bg2:#1A1A18;--bg3:#242422;--bdr:#2E2E2C;--txt:#F0EDE8;--txt2:#A09D98;--txt3:#606060}
 }
 html{scroll-behavior:smooth}
-body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px;line-height:1.5}
+body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px;line-height:1.5;overflow-x:hidden}
 
-/* HEADER */
-.hdr{background:var(--bg2);border-bottom:1px solid var(--bdr);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
-.hdr-inner{max-width:1280px;margin:0 auto;padding:.75rem 1.5rem;display:flex;align-items:center}
-.logo-img{height:30px;width:auto;display:block}
+/* ── HEADER — oculto en desktop, sticky en móvil ── */
+.hdr{
+  background:var(--bg2);border-bottom:1px solid var(--bdr);
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);
+  display:none; /* oculto en desktop */
+}
+.hdr-inner{max-width:1280px;margin:0 auto;padding:.65rem 1.2rem;display:flex;align-items:center;justify-content:space-between}
+.logo-img-hdr{height:26px;width:auto}
+.hdr-link{font-size:11px;color:var(--txt3);text-decoration:none;letter-spacing:.05em;transition:color .15s}
+.hdr-link:hover{color:var(--txt)}
+@media(max-width:768px){.hdr{display:block}} /* visible en móvil */
 
-/* HERO */
-.hero{background:var(--txt);padding:2.8rem 1.5rem;text-align:center;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 110%,rgba(196,168,130,.18) 0%,transparent 65%);pointer-events:none}
-.hero-logo{height:52px;width:auto;margin:0 auto 1rem;display:block;position:relative;z-index:1}
-.hero-sub{font-size:11px;color:rgba(255,255,255,.4);letter-spacing:.1em;position:relative;z-index:1}
+/* ── HERO ── */
+.hero{
+  background:var(--hero-bg);
+  position:relative;overflow:hidden;
+  padding:0;
+  min-height:280px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+#heroBg{
+  position:absolute;inset:0;
+  background-size:cover;background-position:center;
+  opacity:0;transition:opacity .5s;
+  z-index:0;
+}
+.hero-overlay{
+  position:absolute;inset:0;
+  background:var(--hero-overlay);
+  z-index:1;
+}
+.hero-content{
+  position:relative;z-index:2;
+  text-align:center;
+  padding:3rem 1.5rem 2rem;
+  width:100%;
+}
+.hero-logo-wrap{margin-bottom:1rem}
+.hero-logo{height:56px;width:auto;display:block;margin:0 auto}
+.hero-tagline{
+  display:flex;align-items:center;justify-content:center;
+  gap:.5rem;flex-wrap:wrap;
+  font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:rgba(255,255,255,.45);margin-bottom:1.4rem;
+}
+.hero-tagline span{opacity:.3}
+.hero-cta-wrap{display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap}
+.btn-hero-shop{
+  display:inline-flex;align-items:center;gap:.45rem;
+  padding:.65rem 1.4rem;
+  background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:var(--rs);
+  color:rgba(255,255,255,.8);font-family:var(--f);font-size:12px;font-weight:500;
+  text-decoration:none;letter-spacing:.06em;
+  transition:all .2s;
+}
+.btn-hero-shop:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.6);color:#fff}
+.hero-ticker{
+  position:relative;z-index:2;
+  width:100%;overflow:hidden;
+  background:rgba(0,0,0,.3);
+  border-top:1px solid rgba(255,255,255,.08);
+  padding:.45rem 0;
+}
+.ticker-inner{
+  display:flex;gap:3rem;
+  white-space:nowrap;
+  animation:ticker 28s linear infinite;
+  width:max-content;
+}
+.ticker-inner:hover{animation-play-state:paused}
+.ticker-item{
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(255,255,255,.45);font-weight:500;
+}
+.ticker-dot{color:var(--gold);opacity:.6}
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
-/* FILTROS PANEL */
-.filtros-panel{background:var(--bg2);border-bottom:1px solid var(--bdr);position:sticky;top:53px;z-index:90}
-.filtros-inner{max-width:1280px;margin:0 auto;padding:.65rem 1.5rem;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+/* ── FILTROS PANEL ── */
+.filtros-panel{
+  background:var(--bg2);border-bottom:1px solid var(--bdr);
+  position:sticky;top:0;z-index:90;
+}
+@media(max-width:768px){.filtros-panel{top:52px}}
+.filtros-inner{
+  max-width:1280px;margin:0 auto;
+  padding:.6rem 1.5rem;
+  display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;
+}
 .search-wrap{position:relative;flex:1;min-width:180px}
-.search-wrap input{width:100%;padding:.55rem .8rem .55rem 2.1rem;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt);font-family:var(--f);font-size:13px;outline:none;transition:border-color .15s}
+.search-wrap input{
+  width:100%;padding:.52rem .8rem .52rem 2.1rem;
+  background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);
+  color:var(--txt);font-family:var(--f);font-size:13px;outline:none;
+  transition:border-color .15s;
+}
 .search-wrap input:focus{border-color:var(--gold)}
 .search-wrap input::placeholder{color:var(--txt3)}
-.search-wrap::before{content:'';position:absolute;left:.65rem;top:50%;transform:translateY(-50%);width:12px;height:12px;background:var(--txt3);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='black' stroke-width='2.5'/%3E%3Cpath d='m20 20-4-4' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='black' stroke-width='2.5'/%3E%3Cpath d='m20 20-4-4' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;pointer-events:none}
-.f-select{padding:.52rem .75rem;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt);font-family:var(--f);font-size:12.5px;outline:none;cursor:pointer;transition:border-color .15s}
+.search-wrap::before{
+  content:'';position:absolute;left:.65rem;top:50%;transform:translateY(-50%);
+  width:12px;height:12px;background:var(--txt3);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='black' stroke-width='2.5'/%3E%3Cpath d='m20 20-4-4' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='black' stroke-width='2.5'/%3E%3Cpath d='m20 20-4-4' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  pointer-events:none;
+}
+.f-select{
+  padding:.5rem .7rem;background:var(--bg3);border:1px solid var(--bdr);
+  border-radius:var(--rs);color:var(--txt);font-family:var(--f);
+  font-size:12.5px;outline:none;cursor:pointer;transition:border-color .15s;
+}
 .f-select:focus{border-color:var(--gold)}
 .vista-btns{display:flex;gap:.3rem}
-.vista-btn{width:31px;height:31px;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.vista-btn{
+  width:30px;height:30px;background:var(--bg3);border:1px solid var(--bdr);
+  border-radius:var(--rs);color:var(--txt3);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;
+}
 .vista-btn:hover{border-color:var(--gold);color:var(--gold)}
 .vista-btn.active{background:var(--txt);border-color:var(--txt);color:#fff}
-.btn-limpiar{padding:.48rem .8rem;background:transparent;border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt3);font-family:var(--f);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-limpiar{
+  padding:.46rem .8rem;background:transparent;border:1px solid var(--bdr);
+  border-radius:var(--rs);color:var(--txt3);font-family:var(--f);font-size:12px;
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
 .btn-limpiar:hover{border-color:var(--red);color:var(--red)}
-.contador{font-size:11px;color:var(--txt3);margin-left:auto;white-space:nowrap;padding-left:.5rem}
+.contador{font-size:11px;color:var(--txt3);margin-left:auto;white-space:nowrap;padding-left:.4rem}
 
-/* FILTROS CATEGORÍA */
-.cats-wrap{max-width:1280px;margin:0 auto;padding:.75rem 1.5rem .4rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
-.cats-label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--txt3);font-weight:600;margin-right:.2rem}
-.filter-btn{padding:.35rem .8rem;background:transparent;border:1px solid var(--bdr);border-radius:20px;color:var(--txt2);font-family:var(--f);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
+/* ── CATEGORÍAS ── */
+.cats-wrap{
+  max-width:1280px;margin:0 auto;
+  padding:.7rem 1.5rem .4rem;
+  display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;
+}
+.cats-label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--txt3);font-weight:600;margin-right:.2rem;white-space:nowrap}
+.filter-btn{
+  padding:.32rem .75rem;background:transparent;border:1px solid var(--bdr);
+  border-radius:20px;color:var(--txt2);font-family:var(--f);font-size:12px;
+  font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;
+}
 .filter-btn:hover{border-color:var(--txt);color:var(--txt)}
 .filter-btn.active{background:var(--txt);border-color:var(--txt);color:#fff}
 
-/* MAIN */
+/* ── MAIN ── */
 .main{max-width:1280px;margin:0 auto;padding:1.4rem}
+
+/* ── LOADING ── */
 #loadingState{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5rem;gap:.8rem}
-.spinner{width:30px;height:30px;border:2px solid var(--bdr);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+.spinner{
+  width:30px;height:30px;
+  border:2px solid var(--bdr);border-top-color:var(--gold);
+  border-radius:50%;animation:spin .7s linear infinite;
+}
 @keyframes spin{to{transform:rotate(360deg)}}
 #emptyState{display:none;flex-direction:column;align-items:center;justify-content:center;padding:5rem;gap:.6rem;text-align:center}
 
-/* GRID */
+/* ── GRID ── */
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1rem}
-.prod-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s,border-color .2s;animation:fadeUp .3s ease both}
-.prod-card:hover{transform:translateY(-3px);box-shadow:var(--sh-h);border-color:var(--gold)}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── CARD — animación reveal ── */
+.prod-card{
+  background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);
+  overflow:hidden;display:flex;flex-direction:column;
+  opacity:0;transform:translateY(18px);
+  transition:opacity .5s ease, transform .5s ease, box-shadow .2s, border-color .2s;
+}
+.prod-card.visible{opacity:1;transform:translateY(0)}
+.prod-card:hover{box-shadow:var(--sh-h);border-color:var(--gold)}
+.prod-card:hover .c-img{transform:scale(1.05)}
+
 .c-img-wrap{position:relative;aspect-ratio:1/1;background:var(--bg3);overflow:hidden;display:flex;align-items:center;justify-content:center}
 .c-img-wrap.no-foto::after{content:'✦';font-size:2rem;color:var(--bdr)}
-.c-img{width:100%;height:100%;object-fit:cover;transition:transform .4s;position:absolute;inset:0}
-.prod-card:hover .c-img{transform:scale(1.04)}
-.c-dot{position:absolute;top:.6rem;right:.6rem;width:9px;height:9px;border-radius:50%;border:2px solid rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.2);z-index:1}
+.c-img{width:100%;height:100%;object-fit:cover;transition:transform .5s cubic-bezier(.25,.46,.45,.94);position:absolute;inset:0}
+.c-dot{position:absolute;top:.6rem;right:.6rem;width:9px;height:9px;border-radius:50%;border:2px solid rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.25);z-index:1}
 .c-pill{position:absolute;top:.6rem;left:.6rem;background:rgba(17,17,16,.78);color:#fff;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;font-weight:700;backdrop-filter:blur(4px);z-index:1}
 .c-pill-inline{background:rgba(196,168,130,.15);color:var(--gold);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;font-weight:700}
 .c-body{padding:.85rem;display:flex;flex-direction:column;gap:.28rem;flex:1}
@@ -285,16 +440,32 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
 .dot-green{background:var(--grn)}.dot-yellow{background:#C9A84C}.dot-red{background:var(--red)}
 .c-desc{font-size:11px;color:var(--txt2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .c-btns{display:flex;gap:.4rem;margin-top:auto;padding-top:.7rem}
-.btn-wa-min{display:flex;align-items:center;justify-content:center;gap:.35rem;flex:1;padding:.55rem .6rem;background:transparent;color:var(--txt2);border:1px solid var(--bdr);border-radius:var(--rs);font-family:var(--f);font-size:11.5px;font-weight:600;text-decoration:none;transition:all .15s;white-space:nowrap}
-.btn-wa-min:hover{border-color:var(--gold);color:var(--txt);background:rgba(196,168,130,.08)}
-.btn-shop{display:flex;align-items:center;justify-content:center;gap:.35rem;flex:1;padding:.55rem .6rem;background:var(--txt);color:var(--bg2);border:1px solid var(--txt);border-radius:var(--rs);font-family:var(--f);font-size:11.5px;font-weight:600;text-decoration:none;transition:all .15s;white-space:nowrap}
+.btn-wa-min{
+  display:flex;align-items:center;justify-content:center;gap:.35rem;flex:1;
+  padding:.55rem .6rem;background:transparent;color:var(--txt2);
+  border:1px solid var(--bdr);border-radius:var(--rs);
+  font-family:var(--f);font-size:11.5px;font-weight:600;
+  text-decoration:none;transition:all .15s;white-space:nowrap;
+}
+.btn-wa-min:hover{border-color:#25D366;color:#25D366;background:rgba(37,211,102,.06)}
+.btn-shop{
+  display:flex;align-items:center;justify-content:center;gap:.35rem;flex:1;
+  padding:.55rem .6rem;background:var(--txt);color:var(--bg2);
+  border:1px solid var(--txt);border-radius:var(--rs);
+  font-family:var(--f);font-size:11.5px;font-weight:600;
+  text-decoration:none;transition:all .15s;white-space:nowrap;
+}
 .btn-shop:hover{background:var(--txt2);border-color:var(--txt2)}
-.r-btns{display:flex;flex-direction:column;gap:.35rem;flex-shrink:0}
-.r-btns .btn-wa-min,.r-btns .btn-shop{padding:.5rem .75rem;font-size:11px}
 
-/* LISTA */
+/* ── LISTA ── */
 .prod-lista{display:flex;flex-direction:column;gap:.6rem}
-.prod-row{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);display:flex;align-items:center;gap:1rem;padding:.85rem;transition:border-color .2s,box-shadow .2s;animation:fadeUp .3s ease both}
+.prod-row{
+  background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);
+  display:flex;align-items:center;gap:1rem;padding:.85rem;
+  opacity:0;transform:translateX(-12px);
+  transition:opacity .4s ease,transform .4s ease,border-color .2s,box-shadow .2s;
+}
+.prod-row.visible{opacity:1;transform:translateX(0)}
 .prod-row:hover{border-color:var(--gold);box-shadow:var(--sh)}
 .r-img-wrap{width:70px;height:70px;flex-shrink:0;border-radius:var(--rs);overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center}
 .r-img-wrap.no-foto::after{content:'✦';font-size:1.2rem;color:var(--bdr)}
@@ -302,48 +473,107 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
 .r-info{flex:1;min-width:0}
 .r-nombre{font-size:14px;font-weight:700;color:var(--txt);margin-bottom:.2rem}
 .r-meta{display:flex;gap:.45rem;flex-wrap:wrap;align-items:center;margin-top:.35rem}
-.r-wa{flex-shrink:0;padding:.55rem .85rem;font-size:12px}
+.r-btns{display:flex;flex-direction:column;gap:.35rem;flex-shrink:0}
+.r-btns .btn-wa-min,.r-btns .btn-shop{padding:.5rem .75rem;font-size:11px}
 
-/* FOOTER */
-.footer{margin-top:4rem;border-top:1px solid var(--bdr);padding:2rem 1.5rem;text-align:center}
-.footer-logo{height:26px;width:auto;opacity:.35;margin:0 auto}
+/* ── SCROLL TO TOP ── */
+#topBtn{
+  position:fixed;bottom:1.8rem;right:1.8rem;z-index:200;
+  width:42px;height:42px;
+  background:var(--txt);color:var(--bg2);
+  border:none;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  opacity:0;pointer-events:none;
+  transform:translateY(8px);
+  transition:opacity .25s,transform .25s,background .15s;
+  box-shadow:0 4px 16px rgba(0,0,0,.2);
+}
+#topBtn.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+#topBtn:hover{background:var(--gold)}
+#topBtn svg{flex-shrink:0}
 
+/* ── FOOTER ── */
+.footer{margin-top:4rem;border-top:1px solid var(--bdr);padding:2.5rem 1.5rem;text-align:center}
+.footer-logo{height:28px;width:auto;opacity:.35;margin:0 auto;display:block}
+.footer-sub{font-size:11px;color:var(--txt3);margin-top:.5rem}
+.footer-link{color:var(--gold);text-decoration:none;font-size:11px;letter-spacing:.05em;transition:opacity .15s}
+.footer-link:hover{opacity:.7}
+
+/* ── RESPONSIVE ── */
 @media(max-width:768px){
+  .filtros-panel{top:52px}
   .prod-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.75rem}
   .r-btns{display:none}
   .contador{display:none}
+  #topBtn{bottom:1.2rem;right:1.2rem;width:38px;height:38px}
 }
 @media(max-width:480px){
-  .hdr-inner,.filtros-inner,.main{padding-left:1rem;padding-right:1rem}
-  .hero{padding:2rem 1rem}
-  .hero-logo{height:38px}
-  .filtros-inner{gap:.4rem}
+  .filtros-inner,.main,.cats-wrap{padding-left:1rem;padding-right:1rem}
+  .hero-content{padding:2.2rem 1rem 1.5rem}
+  .hero-logo{height:42px}
 }
 </style>
 </head>
 <body>
 
+<!-- HEADER — solo visible en móvil -->
 <header class="hdr">
   <div class="hdr-inner">
-    <img src="logo%20dizzeno%20negro.png" alt="Dizzeño Art Glass" class="logo-img"
-      onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=\'font-weight:700;letter-spacing:.1em\'>DIZZEÑO</span>')">
+    <img src="logo%20dizzeno%20negro.png" alt="Dizzeño Art Glass" class="logo-img-hdr"
+      onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=\'font-weight:700;letter-spacing:.1em;font-size:.95rem\'>DIZZEÑO</span>')">
+    <a href="https://dizzeno.com" class="hdr-link">← dizzeno.com</a>
   </div>
 </header>
 
+<!-- HERO -->
 <section class="hero">
-  <img src="logo%20dizzeno%20blanco.png" alt="Dizzeño Art Glass" class="hero-logo"
-    onerror="this.style.display='none'">
-  <div class="hero-sub">VIDRIO SOPLADO · HECHO A MANO · TONALÁ, JALISCO · STOCK EN TIEMPO REAL</div>
+  <div id="heroBg"></div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-logo-wrap">
+      <img src="logo%20dizzeno%20blanco.png" alt="Dizzeño Art Glass" class="hero-logo"
+        onerror="this.style.display='none'">
+    </div>
+    <div class="hero-tagline">
+      <span id="heroTexto1">VIDRIO SOPLADO · HECHO A MANO · TONALÁ, JALISCO</span>
+      <span class="ticker-dot">·</span>
+      <span id="heroTexto2">STOCK EN TIEMPO REAL · ENVÍOS A TODO MÉXICO</span>
+    </div>
+    <div class="hero-cta-wrap">
+      <a href="https://dizzeno.com" class="btn-hero-shop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="13" height="13"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Visitar dizzeno.com
+      </a>
+    </div>
+  </div>
+  <!-- TICKER -->
+  <div class="hero-ticker">
+    <div class="ticker-inner">
+      <span class="ticker-item">Vidrio soplado artesanal</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Hecho a mano en Tonalá</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Envíos a todo México</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Entrega inmediata</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Stock en tiempo real</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Mayoreo y menudeo</span><span class="ticker-dot">✦</span>
+      <!-- Duplicado para loop continuo -->
+      <span class="ticker-item">Vidrio soplado artesanal</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Hecho a mano en Tonalá</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Envíos a todo México</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Entrega inmediata</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Stock en tiempo real</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Mayoreo y menudeo</span><span class="ticker-dot">✦</span>
+    </div>
+  </div>
 </section>
 
+<!-- FILTROS -->
 <div class="filtros-panel">
   <div class="filtros-inner">
     <div class="search-wrap">
       <input type="text" id="searchInput" placeholder="Buscar pieza..." oninput="onBusqueda()">
     </div>
-    <select class="f-select" id="selColor" onchange="onColor()">
-      <option value="">Todos los colores</option>
-    </select>
+    <select class="f-select" id="selColor" onchange="onColor()"><option value="">Todos los colores</option></select>
     <select class="f-select" id="selBarrenado" onchange="onBarrenado()">
       <option value="">Todas las piezas</option>
       <option value="si">Con barreno (lámpara)</option>
@@ -360,8 +590,8 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
       <option value="cat">Por categoría</option>
       <option value="color">Por color</option>
       <option value="reciente">Recién agregados</option>
-      <option value="stock-d">Mayor stock primero</option>
-      <option value="stock-a">Menor stock primero</option>
+      <option value="stock-d">Mayor stock</option>
+      <option value="stock-a">Menor stock</option>
     </select>
     <div class="vista-btns">
       <button class="vista-btn active" id="btnGrid" onclick="setVista('grid')" title="Grid">
@@ -376,11 +606,13 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
   </div>
 </div>
 
+<!-- CATEGORÍAS -->
 <div class="cats-wrap">
   <span class="cats-label">Colección</span>
   <div id="filtrosCats" style="display:flex;gap:.4rem;flex-wrap:wrap"></div>
 </div>
 
+<!-- CATÁLOGO -->
 <main class="main">
   <div id="loadingState">
     <div class="spinner"></div>
@@ -396,13 +628,20 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
   </div>
 </main>
 
+<!-- FOOTER -->
 <footer class="footer">
-  <div>
-    <img src="logo%20dizzeno%20negro.png" alt="Dizzeño" class="footer-logo"
-      onerror="this.style.display='none'">
-    <div style="font-size:11px;color:var(--txt3);margin-top:.5rem">Tonalá, Guadalajara, Jalisco · México</div>
+  <img src="logo%20dizzeno%20negro.png" alt="Dizzeño" class="footer-logo"
+    onerror="this.style.display='none'">
+  <div class="footer-sub">Tonalá, Guadalajara, Jalisco · México</div>
+  <div style="margin-top:.5rem">
+    <a href="https://dizzeno.com" class="footer-link">dizzeno.com</a>
   </div>
 </footer>
+
+<!-- SCROLL TO TOP -->
+<button id="topBtn" onclick="scrollTop()" title="Volver arriba">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
 
 </body>
 </html>
