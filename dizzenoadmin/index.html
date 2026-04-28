@@ -395,17 +395,41 @@ window.tomarFoto=()=>{
   const video=document.getElementById('camaraVideo'); const canvas=document.getElementById('camaraCanvas');
   canvas.width=video.videoWidth; canvas.height=video.videoHeight;
   canvas.getContext('2d').drawImage(video,0,0);
-  window._fotoBase64=canvas.toDataURL('image/jpeg',0.85);
-  document.getElementById('camaraPreview').src=window._fotoBase64;
-  document.getElementById('camaraPreview').style.display='block';
-  document.getElementById('camaraOk').style.display='block';
+  comprimirYGuardar(canvas.toDataURL('image/jpeg',0.85),'camaraPreview','camaraOk');
 };
+
 window.procesarArchivo=input=>{
   const file=input.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=e=>{ window._fotoBase64=e.target.result; document.getElementById('filePreview').src=e.target.result; document.getElementById('filePreview').style.display='block'; };
-  r.readAsDataURL(file);
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      // Redimensionar a máximo 1200px manteniendo proporción
+      const MAX=1200; let w=img.width, h=img.height;
+      if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      // Comprimir hasta que quepa en Firestore (<700KB en base64 ≈ ~500KB real)
+      let quality=0.82; let dataUrl=canvas.toDataURL('image/jpeg',quality);
+      while(dataUrl.length>700000 && quality>0.3){ quality-=0.08; dataUrl=canvas.toDataURL('image/jpeg',quality); }
+      comprimirYGuardar(dataUrl,'filePreview',null);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
 };
+
+function comprimirYGuardar(dataUrl,previewId,okId){
+  window._fotoBase64=dataUrl;
+  const prev=document.getElementById(previewId);
+  if(prev){prev.src=dataUrl;prev.style.display='block';}
+  if(okId){const ok=document.getElementById(okId);if(ok)ok.style.display='block';}
+  // Mostrar tamaño aproximado
+  const kb=Math.round(dataUrl.length*0.75/1024);
+  const info=document.getElementById('imgSizeInfo');
+  if(info) info.textContent=`Imagen: ~${kb} KB${kb>700?' ⚠ Muy grande, se comprimirá más':''}`;
+}
 function getFotoUrl(){
   const fuente=document.querySelector('.img-tab.active')?.dataset.fuente||'url';
   return fuente==='url'?document.getElementById('prodFotoUrl').value.trim():(window._fotoBase64||'');
@@ -1458,6 +1482,7 @@ thead th{padding:.65rem .8rem;text-align:left;font-size:9px;letter-spacing:.16em
         <div id="imgFuente_url"><input type="url" id="prodFotoUrl" placeholder="https://cdn.shopify.com/..."></div>
         <div id="imgFuente_file" style="display:none">
           <input type="file" accept="image/*" onchange="procesarArchivo(this)" style="padding:.45rem">
+          <div id="imgSizeInfo" style="font-size:11px;color:var(--txt3);margin-top:.3rem"></div>
           <img id="filePreview" class="img-preview" style="display:none">
         </div>
         <div id="imgFuente_camara" style="display:none">
