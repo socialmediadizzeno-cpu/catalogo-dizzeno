@@ -297,10 +297,76 @@ function renderColoresAdmin() {
 }
 
 function renderFiltroColor() {
-  const sel=document.getElementById('filtroColor'); if(!sel) return;
-  sel.innerHTML='<option value="">Todos los colores</option>'+
-    colores.map(c=>`<option value="${c.nombre}">${c.nombre}</option>`).join('');
+  // El filtro de color ahora es autocomplete — no necesita poblar un select
+  // Solo actualizamos la lista interna para las sugerencias
+  window._coloresNombres = colores.map(c=>c.nombre);
 }
+
+// ── AUTOCOMPLETE COLOR ─────────────────────────────────────────────────────
+let acFocusIndex = -1;
+
+window.acColorInput = () => {
+  const val = document.getElementById('filtroColor').value.toLowerCase();
+  const list = document.getElementById('acColorList');
+  const nombres = window._coloresNombres || [];
+  const matches = val
+    ? nombres.filter(n => n.toLowerCase().includes(val))
+    : nombres; // sin texto = muestra todos
+
+  if (!matches.length) {
+    list.innerHTML = `<div class="ac-empty">Sin coincidencias</div>`;
+  } else {
+    list.innerHTML = matches.map((n,i) => {
+      const highlighted = val
+        ? n.replace(new RegExp(`(${val})`, 'gi'), '<strong>$1</strong>')
+        : n;
+      return `<div class="ac-item" data-val="${n}" onmousedown="acColorSelect('${n}')">${highlighted}</div>`;
+    }).join('');
+  }
+  list.classList.add('open');
+  acFocusIndex = -1;
+
+  // Si el input está vacío limpiar filtro
+  if (!val) { filterTable(); }
+};
+
+window.acColorSelect = val => {
+  document.getElementById('filtroColor').value = val;
+  document.getElementById('acColorList').classList.remove('open');
+  acFocusIndex = -1;
+  filterTable();
+};
+
+window.acColorKey = e => {
+  const list = document.getElementById('acColorList');
+  const items = list.querySelectorAll('.ac-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acFocusIndex = Math.min(acFocusIndex+1, items.length-1);
+    items.forEach((el,i) => el.classList.toggle('focused', i===acFocusIndex));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acFocusIndex = Math.max(acFocusIndex-1, 0);
+    items.forEach((el,i) => el.classList.toggle('focused', i===acFocusIndex));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (acFocusIndex >= 0 && items[acFocusIndex]) {
+      acColorSelect(items[acFocusIndex].dataset.val);
+    } else {
+      filterTable(); // buscar con lo que está escrito
+      list.classList.remove('open');
+    }
+  } else if (e.key === 'Escape') {
+    list.classList.remove('open');
+  }
+};
+
+// Cerrar al hacer click fuera
+document.addEventListener('click', e => {
+  if (!document.getElementById('acColorWrap')?.contains(e.target)) {
+    document.getElementById('acColorList')?.classList.remove('open');
+  }
+});
 
 window.addColor = async () => {
   const inp=document.getElementById('newColorNombre');
@@ -487,7 +553,7 @@ function renderTable(){
   const q      = (document.getElementById('searchInput')?.value||'').toLowerCase();
   const barr   = document.getElementById('filtroBarr')?.value||'';
   const vis    = document.getElementById('filtroVis')?.value||'';
-  const color  = document.getElementById('filtroColor')?.value||'';
+  const color  = (document.getElementById('filtroColor')?.value||'').trim();
   const foto   = document.getElementById('filtroFoto')?.value||'';
 
   let lista=productos.filter(p=>
@@ -495,7 +561,7 @@ function renderTable(){
     (!q     || (p.nombre||'').toLowerCase().includes(q)||(p.categoria||'').toLowerCase().includes(q)||(p.color||'').toLowerCase().includes(q)) &&
     (barr===''||(barr==='si'?p.barrenado:!p.barrenado)) &&
     (vis===''||(vis==='visible'?p.disponible!==false:p.disponible===false)) &&
-    (!color  || (p.color||'')===color) &&
+    (!color  || (p.color||'').toLowerCase().includes(color.toLowerCase())) &&
     (foto===''||(foto==='si'?!!p.fotoUrl:!p.fotoUrl))
   );
   lista=getOrdenados(lista);
@@ -1108,8 +1174,17 @@ thead th{padding:.65rem .8rem;text-align:left;font-size:9px;letter-spacing:.16em
 /* VER COMO */
 .vc-info{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem}
 
-/* COLOR SELECT ROW */
-.color-sel-row{display:flex;gap:.4rem;align-items:center}
+/* AUTOCOMPLETE COLOR */
+.autocomplete-wrap{position:relative;min-width:150px}
+.autocomplete-wrap input{width:100%;padding:.52rem .75rem;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt);font-family:var(--f);font-size:12.5px;outline:none;transition:border-color .15s}
+.autocomplete-wrap input:focus{border-color:var(--tan)}
+.autocomplete-wrap input::placeholder{color:var(--txt3)}
+.ac-list{display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bdr);border-top:none;border-radius:0 0 var(--rs) var(--rs);z-index:200;max-height:200px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.1)}
+.ac-list.open{display:block}
+.ac-item{padding:.5rem .75rem;font-size:12.5px;color:var(--txt);cursor:pointer;transition:background .12s}
+.ac-item:hover,.ac-item.focused{background:var(--tan-dim);color:var(--txt)}
+.ac-item strong{color:var(--tan)}
+.ac-empty{padding:.5rem .75rem;font-size:12px;color:var(--txt3);font-style:italic}
 .color-sel-row select{flex:1}
 .btn-add-color{padding:.55rem .7rem;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt2);font-size:13px;cursor:pointer;transition:all .13s;white-space:nowrap;flex-shrink:0}
 .btn-add-color:hover{border-color:var(--tan);color:var(--tan)}
@@ -1190,7 +1265,11 @@ thead th{padding:.65rem .8rem;text-align:left;font-size:9px;letter-spacing:.16em
         <div class="toolbar">
           <div class="search-wrap"><input type="text" id="searchInput" placeholder="Buscar..." oninput="searchTable()"></div>
           <select id="filtroCat" onchange="filterTable()"><option value="">Todas las categorías</option></select>
-          <select id="filtroColor" onchange="filterTable()"><option value="">Todos los colores</option></select>
+          <div class="autocomplete-wrap" id="acColorWrap">
+            <input type="text" id="filtroColor" placeholder="Color / variante..." autocomplete="off"
+              oninput="acColorInput()" onfocus="acColorInput()" onkeydown="acColorKey(event)">
+            <div class="ac-list" id="acColorList"></div>
+          </div>
           <select id="filtroVis" onchange="filterTable()">
             <option value="">Publicados y ocultos</option>
             <option value="visible">Solo publicados</option>
