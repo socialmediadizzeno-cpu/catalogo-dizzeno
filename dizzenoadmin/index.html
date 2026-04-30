@@ -302,21 +302,42 @@ function renderFiltroColor() {
   window._coloresNombres = colores.map(c=>c.nombre);
 }
 
-// ── AUTOCOMPLETE COLOR ─────────────────────────────────────────────────────
+// ── AUTOCOMPLETE COLOR — búsqueda por palabra clave ───────────────────────
 let acFocusIndex = -1;
 
+// Extrae palabras clave únicas de color + descripcion de todos los productos
+function getKeywords() {
+  const set = new Set();
+  // Palabras individuales de todos los valores de color y descripcion
+  productos.forEach(p => {
+    [p.color, p.descripcion].forEach(campo => {
+      if (!campo) return;
+      // Agregar el valor completo
+      set.add(campo.trim());
+      // Agregar cada palabra individual (mínimo 3 letras)
+      campo.trim().split(/[\s\/\-]+/).forEach(w => {
+        if (w.length >= 3) set.add(w.trim());
+      });
+    });
+  });
+  // También los colores del catálogo
+  (window._coloresNombres||[]).forEach(n => set.add(n));
+  return [...set].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+}
+
 window.acColorInput = () => {
-  const val = document.getElementById('filtroColor').value.toLowerCase();
+  const val = document.getElementById('filtroColor').value.toLowerCase().trim();
   const list = document.getElementById('acColorList');
-  const nombres = window._coloresNombres || [];
+
+  const keywords = getKeywords();
   const matches = val
-    ? nombres.filter(n => n.toLowerCase().includes(val))
-    : nombres; // sin texto = muestra todos
+    ? keywords.filter(n => n.toLowerCase().includes(val))
+    : keywords.slice(0, 60); // máximo 60 sugerencias al abrir sin texto
 
   if (!matches.length) {
-    list.innerHTML = `<div class="ac-empty">Sin coincidencias</div>`;
+    list.innerHTML = `<div class="ac-empty">Sin coincidencias para "${val}"</div>`;
   } else {
-    list.innerHTML = matches.map((n,i) => {
+    list.innerHTML = matches.slice(0, 80).map(n => {
       const highlighted = val
         ? n.replace(new RegExp(`(${val})`, 'gi'), '<strong>$1</strong>')
         : n;
@@ -325,9 +346,8 @@ window.acColorInput = () => {
   }
   list.classList.add('open');
   acFocusIndex = -1;
-
-  // Si el input está vacío limpiar filtro
-  if (!val) { filterTable(); }
+  // Filtrar en tiempo real mientras escribe
+  filterTable();
 };
 
 window.acColorSelect = val => {
@@ -558,10 +578,10 @@ function renderTable(){
 
   let lista=productos.filter(p=>
     (!cat   || p.categoria===cat) &&
-    (!q     || (p.nombre||'').toLowerCase().includes(q)||(p.categoria||'').toLowerCase().includes(q)||(p.color||'').toLowerCase().includes(q)) &&
+    (!q     || (p.nombre||'').toLowerCase().includes(q)||(p.categoria||'').toLowerCase().includes(q)||(p.color||'').toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)) &&
     (barr===''||(barr==='si'?p.barrenado:!p.barrenado)) &&
     (vis===''||(vis==='visible'?p.disponible!==false:p.disponible===false)) &&
-    (!color  || (p.color||'').toLowerCase().includes(color.toLowerCase())) &&
+    (!color  || (p.color||'').toLowerCase().includes(color.toLowerCase()) || (p.descripcion||'').toLowerCase().includes(color.toLowerCase())) &&
     (foto===''||(foto==='si'?!!p.fotoUrl:!p.fotoUrl))
   );
   lista=getOrdenados(lista);
@@ -935,6 +955,42 @@ window.guardarTema = async () => {
 };
 
 window.resetTema=()=>{ if(!confirm('¿Restaurar colores por defecto?')) return; localStorage.removeItem('dizzeno_tema'); location.reload(); };
+
+// ── MIGRACIÓN: descripcion → color ────────────────────────────────────────
+window.migrarColores = async () => {
+  const candidatos = productos.filter(p => p.descripcion?.trim() && !p.color?.trim());
+  if (!candidatos.length) {
+    document.getElementById('migracionStatus').textContent = '✅ Todos los productos ya tienen el campo color correcto.';
+    return;
+  }
+  if (!confirm(`Se van a migrar ${candidatos.length} productos: su Descripción pasará al campo Color y la Descripción quedará vacía. ¿Continuar?`)) return;
+
+  const btn = document.getElementById('btnMigrar');
+  btn.disabled = true; btn.textContent = 'Migrando...';
+  const status = document.getElementById('migracionStatus');
+
+  const chunks = [];
+  for (let i=0; i<candidatos.length; i+=400) chunks.push(candidatos.slice(i,i+400));
+
+  let ok = 0;
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    for (const p of chunk) {
+      batch.update(doc(db,"productos",p.id), {
+        color: p.descripcion.trim(),
+        descripcion: '',
+        updatedAt: serverTimestamp()
+      });
+      ok++;
+    }
+    await batch.commit();
+    status.textContent = `Migrando... ${ok} / ${candidatos.length}`;
+  }
+
+  status.textContent = `✅ ${ok} productos migrados correctamente. Ahora los colores aparecen en el filtro.`;
+  btn.disabled = false; btn.textContent = 'Migrar colores ahora';
+  registrarBitacora('edicion_masiva', `Migración descripcion→color (${ok} productos)`, ok);
+};
 
 // ── NAV ────────────────────────────────────────────────────────────────────
 window.goSection=id=>{
@@ -1402,8 +1458,16 @@ thead th{padding:.65rem .8rem;text-align:left;font-size:9px;letter-spacing:.16em
               <button class="btn-add-sm" onclick="addColor()">+</button>
             </div>
           </div>
-          <div class="cfg-card">
-            <div class="cfg-title">Campos personalizados</div>
+          <div class="cfg-card" style="border-color:rgba(196,168,130,.4)">
+            <div class="cfg-title">Migrar colores desde descripción</div>
+            <div class="cfg-desc">Al importar el inventario desde Excel, los colores quedaron guardados en el campo <em>Descripción</em> en lugar del campo <em>Color/Variante</em>. Esta herramienta los mueve automáticamente.</div>
+            <div class="info-box" style="margin-bottom:.8rem;font-size:12px">
+              <strong>¿Qué hace?</strong> Para cada producto que tenga <em>Descripción</em> con valor y <em>Color</em> vacío, copia la descripción al campo color y deja la descripción en blanco.<br><br>
+              <strong>¿Es reversible?</strong> No automáticamente, pero los datos no se pierden — solo se mueven de campo.
+            </div>
+            <div id="migracionStatus" style="font-size:12px;color:var(--txt3);margin-bottom:.6rem"></div>
+            <button class="btn-new" onclick="migrarColores()" id="btnMigrar">Migrar colores ahora</button>
+          </div>
             <div class="cfg-desc">Atributos extra en el formulario de productos. Por ejemplo: "Técnica", "Medidas", "Material". Tipos disponibles: texto libre, número, sí/no, lista de opciones.</div>
             <div class="tags-area" id="camposTagsAdmin"></div>
             <div class="add-row" style="flex-wrap:wrap">
