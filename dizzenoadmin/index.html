@@ -91,6 +91,11 @@ function showApp() {
   init();
 }
 function aplicarPermisos(p) {
+  // Si es administrador, mostrar todo siempre
+  if (window._rol === 'administrador') {
+    document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin,.nav-config,.nav-usuarios,.nav-bitacora').forEach(el=>el.style.display='');
+    return;
+  }
   p = p || userPerms;
   document.querySelectorAll('.perm-precio').forEach(el=>el.style.display=p.verPrecio?'':'none');
   document.querySelectorAll('.perm-editor').forEach(el=>el.style.display=p.editarProducto?'':'none');
@@ -1000,6 +1005,7 @@ window.goSection=id=>{
   document.querySelector(`[data-s="${id}"]`)?.classList.add('active');
   if(id==='usuarios')  loadUsuarios();
   if(id==='bitacora')  loadBitacora();
+  aplicarPermisos(); // re-aplicar siempre al navegar
   document.getElementById('sidebar').classList.remove('open');
 };
 window.toggleSidebar=()=>document.getElementById('sidebar').classList.toggle('open');
