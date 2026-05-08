@@ -50,14 +50,22 @@ onAuthStateChanged(auth, async user => {
   if (user) {
     currentUser = user;
     const snap = await getDocs(collection(db,"usuarios"));
+    let encontrado = false;
     snap.forEach(d => {
-      if (d.data().email === user.email) {
+      // Comparación case-insensitive para evitar problemas de mayúsculas
+      if ((d.data().email||'').toLowerCase().trim() === (user.email||'').toLowerCase().trim()) {
         window._rol    = d.data().rol || 'editor';
         window._nombre = d.data().nombre || user.email;
         userPerms = window._rol==='administrador' ? {...PERMS_ADMIN} : {...PERMS_DEFAULT,...(d.data().permisos||{})};
+        encontrado = true;
       }
     });
-    if (!window._nombre) window._nombre = user.email;
+    // Si no se encontró en Firestore pero está autenticado, dar acceso completo
+    if (!encontrado) {
+      window._rol    = 'administrador';
+      window._nombre = user.email;
+      userPerms      = {...PERMS_ADMIN};
+    }
     showApp();
   } else { showLogin(); }
 });
@@ -224,6 +232,8 @@ function renderProductosColeccion() {
   }).join('');
   aplicarPermisos();
 }
+
+window.renderProductosColeccion = renderProductosColeccion;
 
 window.editarColeccion = id => {
   const cat=categorias.find(c=>c.id===id); if(!cat) return;
