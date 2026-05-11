@@ -59,7 +59,6 @@ onAuthStateChanged(auth, async user => {
         encontrado = true;
       }
     });
-    // Si no se encuentra en Firestore, dar acceso completo
     if (!encontrado) {
       window._rol    = 'administrador';
       window._nombre = user.email;
@@ -98,7 +97,7 @@ function showApp() {
   init();
 }
 function aplicarPermisos(p) {
-  // Administrador siempre ve todo
+  // Si es administrador, mostrar todo sin revisar permisos
   if (window._rol === 'administrador') {
     document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin,.nav-config,.nav-usuarios,.nav-bitacora').forEach(el => el.style.display = '');
     return;
@@ -111,7 +110,7 @@ function aplicarPermisos(p) {
   document.querySelectorAll('.nav-usuarios').forEach(el=>el.style.display=p.verUsuarios?'':'none');
   document.querySelectorAll('.nav-bitacora').forEach(el=>el.style.display=p.verBitacora?'':'none');
 }
-// Solo toca elementos de tabla — nunca el nav sidebar
+// Solo toca elementos de tabla — NUNCA el nav sidebar
 function aplicarPermisosTabla() {
   if (window._rol === 'administrador') {
     document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin').forEach(el => el.style.display = '');
@@ -1279,9 +1278,10 @@ window.aplicarCsvExistencias = async () => {
   btn.textContent = 'Aplicar actualización';
 };
 
+// ── NAV ────────────────────────────────────────────────────────────────────
+// Exponer renderProductosColeccion para uso desde HTML
 window.renderProductosColeccion = renderProductosColeccion;
 
-// ── NAV ────────────────────────────────────────────────────────────────────
 window.goSection=id=>{
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -1289,7 +1289,8 @@ window.goSection=id=>{
   document.querySelector(`[data-s="${id}"]`)?.classList.add('active');
   if(id==='usuarios')  loadUsuarios();
   if(id==='bitacora')  loadBitacora();
-  aplicarPermisos(); // re-aplicar al navegar con rol ya confirmado
+  // Re-aplicar permisos al navegar — rol ya confirmado en este punto
+  aplicarPermisos();
   document.getElementById('sidebar').classList.remove('open');
 };
 window.toggleSidebar=()=>document.getElementById('sidebar').classList.toggle('open');
