@@ -59,6 +59,7 @@ onAuthStateChanged(auth, async user => {
         encontrado = true;
       }
     });
+    // Si no se encuentra en Firestore, dar acceso completo
     if (!encontrado) {
       window._rol    = 'administrador';
       window._nombre = user.email;
@@ -97,9 +98,9 @@ function showApp() {
   init();
 }
 function aplicarPermisos(p) {
-  // Administrador siempre ve todo — sin excepciones
+  // Administrador siempre ve todo
   if (window._rol === 'administrador') {
-    document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin,.nav-config,.nav-usuarios,.nav-bitacora').forEach(el=>el.style.display='');
+    document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin,.nav-config,.nav-usuarios,.nav-bitacora').forEach(el => el.style.display = '');
     return;
   }
   p = p || userPerms;
@@ -109,6 +110,16 @@ function aplicarPermisos(p) {
   document.querySelectorAll('.nav-config').forEach(el=>el.style.display=p.verConfig?'':'none');
   document.querySelectorAll('.nav-usuarios').forEach(el=>el.style.display=p.verUsuarios?'':'none');
   document.querySelectorAll('.nav-bitacora').forEach(el=>el.style.display=p.verBitacora?'':'none');
+}
+// Solo toca elementos de tabla — nunca el nav sidebar
+function aplicarPermisosTabla() {
+  if (window._rol === 'administrador') {
+    document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin').forEach(el => el.style.display = '');
+    return;
+  }
+  document.querySelectorAll('.perm-precio').forEach(el=>el.style.display=userPerms.verPrecio?'':'none');
+  document.querySelectorAll('.perm-editor').forEach(el=>el.style.display=userPerms.editarProducto?'':'none');
+  document.querySelectorAll('.perm-admin').forEach(el=>el.style.display=userPerms.eliminarProducto?'':'none');
 }
 async function init() {
   await loadCategorias();
@@ -635,17 +646,6 @@ function renderTable(){
   }).join('');
   aplicarPermisosTabla();
   actualizarBarraMasiva();
-}
-
-// Versión limitada — solo toca elementos dentro de la tabla, nunca el nav
-function aplicarPermisosTabla() {
-  if (window._rol === 'administrador') {
-    document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin').forEach(el=>el.style.display='');
-    return;
-  }
-  document.querySelectorAll('.perm-precio').forEach(el=>el.style.display=userPerms.verPrecio?'':'none');
-  document.querySelectorAll('.perm-editor').forEach(el=>el.style.display=userPerms.editarProducto?'':'none');
-  document.querySelectorAll('.perm-admin').forEach(el=>el.style.display=userPerms.eliminarProducto?'':'none');
 }
 
 window.filterTable=()=>renderTable();
@@ -1279,6 +1279,8 @@ window.aplicarCsvExistencias = async () => {
   btn.textContent = 'Aplicar actualización';
 };
 
+window.renderProductosColeccion = renderProductosColeccion;
+
 // ── NAV ────────────────────────────────────────────────────────────────────
 window.goSection=id=>{
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
@@ -1287,7 +1289,7 @@ window.goSection=id=>{
   document.querySelector(`[data-s="${id}"]`)?.classList.add('active');
   if(id==='usuarios')  loadUsuarios();
   if(id==='bitacora')  loadBitacora();
-  aplicarPermisos();
+  aplicarPermisos(); // re-aplicar al navegar con rol ya confirmado
   document.getElementById('sidebar').classList.remove('open');
 };
 window.toggleSidebar=()=>document.getElementById('sidebar').classList.toggle('open');
