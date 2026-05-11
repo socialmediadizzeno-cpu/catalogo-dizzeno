@@ -228,7 +228,7 @@ function renderProductosColeccion() {
       <td><button class="ic-btn perm-editor" onclick="openEdit('${p.id}')" title="Editar">✎</button></td>
     </tr>`;
   }).join('');
-  aplicarPermisos();
+  aplicarPermisosTabla();
 }
 
 window.editarColeccion = id => {
@@ -633,8 +633,19 @@ function renderTable(){
       <td>${barrBadge}</td>
     </tr>`;
   }).join('');
-  aplicarPermisos();
+  aplicarPermisosTabla();
   actualizarBarraMasiva();
+}
+
+// Versión limitada — solo toca elementos dentro de la tabla, nunca el nav
+function aplicarPermisosTabla() {
+  if (window._rol === 'administrador') {
+    document.querySelectorAll('.perm-precio,.perm-editor,.perm-admin').forEach(el=>el.style.display='');
+    return;
+  }
+  document.querySelectorAll('.perm-precio').forEach(el=>el.style.display=userPerms.verPrecio?'':'none');
+  document.querySelectorAll('.perm-editor').forEach(el=>el.style.display=userPerms.editarProducto?'':'none');
+  document.querySelectorAll('.perm-admin').forEach(el=>el.style.display=userPerms.eliminarProducto?'':'none');
 }
 
 window.filterTable=()=>renderTable();
