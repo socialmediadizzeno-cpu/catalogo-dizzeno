@@ -84,15 +84,18 @@ function poblarCategorias() {
   const container = document.getElementById('filtrosCats'); if(!container) return;
   container.innerHTML =
     `<button class="filter-btn ${!filtros.categoria?'active':''}" onclick="setFiltro('categoria','')">Todas</button>` +
-    categorias.map(c =>
-      `<button class="filter-btn ${filtros.categoria===c.nombre?'active':''}" onclick="setFiltro('categoria','${c.nombre}')">${c.nombre}</button>`
-    ).join('');
-  // Sincronizar botón Red Sale Outlet
-  const btnSale = document.getElementById('btnRedSale');
-  if(btnSale) {
-    btnSale.classList.toggle('active', filtros.categoria === 'RED SALE OUTLET');
-    btnSale.classList.toggle('active-sale', filtros.categoria === 'RED SALE OUTLET');
-  }
+    categorias.map(c => {
+      const isRedSale = c.nombre.toUpperCase().includes('RED SALE');
+      const activo = filtros.categoria === c.nombre;
+      if(isRedSale) {
+        return `<button class="filter-btn filter-btn-sale ${activo?'active-sale':''}" onclick="setFiltro('categoria','${c.nombre}')">
+          <img src="red-sale-outlet.png" alt="${c.nombre}" class="sale-img"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+          <span class="sale-fallback" style="display:none">🔴 ${c.nombre}</span>
+        </button>`;
+      }
+      return `<button class="filter-btn ${activo?'active':''}" onclick="setFiltro('categoria','${c.nombre}')">${c.nombre}</button>`;
+    }).join('');
 }
 
 function poblarColores() {
@@ -621,14 +624,6 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
 <div class="cats-wrap">
   <span class="cats-label">Colección</span>
   <div id="filtrosCats" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center"></div>
-  <!-- RED SALE OUTLET — reemplaza red-sale-outlet.png con tu imagen cuando la tengas -->
-  <button class="filter-btn filter-btn-sale ${filtros.categoria==='RED SALE OUTLET'?'active-sale':''}"
-    onclick="setFiltro('categoria','RED SALE OUTLET')"
-    id="btnRedSale">
-    <img src="red-sale-outlet.png" alt="Red Sale Outlet" class="sale-img"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
-    <span class="sale-fallback">🔴 RED SALE OUTLET</span>
-  </button>
 </div>
 
 <!-- CATÁLOGO -->
