@@ -1093,144 +1093,231 @@ window.procesarCsvExistencias = input => {
   if(!file) return;
 
   const reader = new FileReader();
-
   reader.onload = e => {
     const rows = parseCsvText(e.target.result);
 
+    // Buscar la fila de encabezados
     const headerIndex = rows.findIndex(row =>
-      row.some(cell => normalizarTexto(cell) === 'nombre del producto') &&
-      row.some(cell => normalizarTexto(cell) === 'existencia')
+      row.some(cell => normalizarTexto(cell) === 'nombre del producto')
     );
-
     if(headerIndex === -1){
-      alert('No encontré las columnas "Nombre del Producto" y "Existencia".');
+      alert('No encontré la columna "Nombre del Producto".');
       return;
     }
 
     const headers = rows[headerIndex].map(normalizarTexto);
-    const idxNombre = headers.indexOf('nombre del producto');
-    const idxExistencia = headers.indexOf('existencia');
+    const idxNombre      = headers.indexOf('nombre del producto');
+    const idxExistencia  = headers.findIndex(h => h.includes('existencia'));
+    const idxDescripcion = headers.findIndex(h => h.includes('descripci'));
+    const idxCategoria   = headers.findIndex(h => h.includes('categor'));
 
-    const mapaProductos = new Map();
-    const duplicadosAdmin = new Set();
+    if(idxExistencia === -1){
+      alert('No encontré la columna "Existencia".');
+      return;
+    }
+
+    // ── ÍNDICE DE FIREBASE ────────────────────────────────────────────────
+    // Clave 1: nombre+descripcion (más específica)
+    // Clave 2: nombre+color
+    // Clave 3: solo nombre (si es único)
+    const mapaND  = new Map(); // nombre+descripcion → producto
+    const mapaN   = new Map(); // nombre → [productos] para detectar duplicados
+    const duploN  = new Set(); // nombres con más de un producto
 
     productos.forEach(p => {
-      const key = normalizarTexto(p.nombre);
-      if(!key) return;
+      const kNombre = normalizarTexto(p.nombre);
+      if(!kNombre) return;
 
-      if(mapaProductos.has(key)){
-        duplicadosAdmin.add(key);
-      } else {
-        mapaProductos.set(key, p);
-      }
+      // índice por nombre solo
+      if(!mapaN.has(kNombre)) mapaN.set(kNombre, []);
+      mapaN.get(kNombre).push(p);
+
+      // índice por nombre+descripcion
+      const kDesc = normalizarTexto(p.descripcion || p.color || '');
+      mapaND.set(kNombre + '|||' + kDesc, p);
+
+      // índice por nombre+color
+      const kColor = normalizarTexto(p.color || '');
+      if(kColor) mapaND.set(kNombre + '|||' + kColor, p);
     });
 
+    // Marcar nombres con múltiples variantes
+    mapaN.forEach((arr, k) => { if(arr.length > 1) duploN.add(k); });
+
+    // ── PARSEAR CSV ───────────────────────────────────────────────────────
     const preview = [];
-    const repetidosCsv = new Set();
-    const vistosCsv = new Set();
+    const vistosCsv = new Map(); // clave → first item, para detectar dupes en CSV
 
     rows.slice(headerIndex + 1).forEach(row => {
-      const nombreCsv = (row[idxNombre] || '').trim();
-      const existenciaRaw = (row[idxExistencia] || '').toString().trim();
+      const nombreRaw    = (row[idxNombre]      || '').trim();
+      const existenciaRaw= (row[idxExistencia]  || '').toString().trim();
+      const descRaw      = idxDescripcion >= 0 ? (row[idxDescripcion] || '').trim() : '';
+      const catRaw       = idxCategoria   >= 0 ? (row[idxCategoria]   || '').trim() : '';
 
-      if(!nombreCsv) return;
+      if(!nombreRaw) return;
 
-      const key = normalizarTexto(nombreCsv);
+      const kNombre = normalizarTexto(nombreRaw);
+      const kDesc   = normalizarTexto(descRaw);
+      const claveCsv = kNombre + '|||' + kDesc;
 
-      if(vistosCsv.has(key)){
-        repetidosCsv.add(key);
+      // Detectar duplicados en el CSV
+      if(vistosCsv.has(claveCsv)){
+        vistosCsv.get(claveCsv)._dupeEnCsv = true;
         return;
       }
+      const item = { nombreRaw, descRaw, catRaw, existenciaRaw, kNombre, kDesc, claveCsv };
+      vistosCsv.set(claveCsv, item);
+    });
 
-      vistosCsv.add(key);
+    // ── MATCHING INTELIGENTE ──────────────────────────────────────────────
+    vistosCsv.forEach(item => {
+      const { nombreRaw, descRaw, catRaw, existenciaRaw, kNombre, kDesc, claveCsv } = item;
 
-      const existencia = parseInt(existenciaRaw.replace(/[^\d-]/g,''), 10);
-
+      const existencia = parseInt(existenciaRaw.replace(/[^\d]/g,''), 10);
       if(Number.isNaN(existencia) || existencia < 0){
-        preview.push({
-          estado: 'error',
-          nombre: nombreCsv,
-          existenciaCsv: existenciaRaw || '—',
-          actual: '—',
-          mensaje: 'Existencia inválida'
-        });
+        preview.push({ estado:'error', nombre:nombreRaw, desc:descRaw, existenciaCsv:existenciaRaw||'—', actual:'—', mensaje:'Existencia inválida' });
         return;
       }
 
-      if(duplicadosAdmin.has(key)){
+      // Intento 1: nombre+descripcion exacto
+      let producto = mapaND.get(claveCsv);
+
+      // Intento 2: nombre+descripcion con variantes de acentos/espacios
+      if(!producto && kDesc){
+        for(const [k, p] of mapaND){
+          const [kn, kd] = k.split('|||');
+          if(kn === kNombre && similitud(kd, kDesc) >= 0.8){
+            producto = p; break;
+          }
+        }
+      }
+
+      // Intento 3: nombre único en Firebase (sin variantes)
+      if(!producto && !duploN.has(kNombre)){
+        const arr = mapaN.get(kNombre);
+        if(arr && arr.length === 1) producto = arr[0];
+      }
+
+      // Intento 4: nombre es único en el CSV para este nombre base → asignar todos
+      if(!producto && duploN.has(kNombre)){
+        // Hay múltiples productos con ese nombre en Firebase — mostrar como "ambiguo"
+        const candidatos = mapaN.get(kNombre) || [];
         preview.push({
-          estado: 'error',
-          nombre: nombreCsv,
+          estado: 'ambiguo',
+          nombre: nombreRaw,
+          desc: descRaw,
           existenciaCsv: existencia,
-          actual: '—',
-          mensaje: 'Nombre duplicado en admin'
+          actual: candidatos.map(p=>`${p.descripcion||p.color||'—'}: ${p.existencias}`).join(' / '),
+          mensaje: `${candidatos.length} variantes — elige`,
+          candidatos: candidatos.map(p=>({id:p.id, label: p.descripcion||p.color||p.nombre, actual: p.existencias})),
+          existenciaFinal: existencia,
         });
         return;
       }
-
-      const producto = mapaProductos.get(key);
 
       if(!producto){
-        preview.push({
-          estado: 'no',
-          nombre: nombreCsv,
-          existenciaCsv: existencia,
-          actual: '—',
-          mensaje: 'No encontrado'
-        });
+        preview.push({ estado:'no', nombre:nombreRaw, desc:descRaw, existenciaCsv:existencia, actual:'—', mensaje:'No encontrado' });
         return;
       }
 
       const actual = parseInt(producto.existencias) || 0;
-
       preview.push({
         estado: actual === existencia ? 'igual' : 'ok',
         id: producto.id,
         nombre: producto.nombre,
+        desc: producto.descripcion || producto.color || descRaw,
         existenciaCsv: existencia,
         actual,
-        mensaje: actual === existencia ? 'Sin cambio' : 'Listo para actualizar'
+        mensaje: actual === existencia ? 'Sin cambio' : 'Actualizar'
       });
     });
 
+    // ── GUARDAR Y RENDERIZAR ──────────────────────────────────────────────
+    window._csvPreview = preview;
     csvExistenciasPendientes = preview.filter(x => x.estado === 'ok');
 
-    const encontrados = preview.filter(x => x.estado === 'ok').length;
-    const iguales = preview.filter(x => x.estado === 'igual').length;
-    const noEncontrados = preview.filter(x => x.estado === 'no').length;
-    const errores = preview.filter(x => x.estado === 'error').length;
+    const cnt = t => preview.filter(x=>x.estado===t).length;
+    const totalOk  = cnt('ok');
+    const totalIg  = cnt('igual');
+    const totalNo  = cnt('no');
+    const totalErr = cnt('error');
+    const totalAmb = cnt('ambiguo');
 
     document.getElementById('csvResumen').innerHTML = `
-      <strong>${encontrados}</strong> por actualizar ·
-      <strong>${iguales}</strong> sin cambio ·
-      <strong>${noEncontrados}</strong> no encontrados ·
-      <strong>${errores}</strong> errores
-      ${repetidosCsv.size ? `<br><span style="color:var(--ylw)">Ojo: ${repetidosCsv.size} nombre(s) repetido(s) en el CSV fueron ignorados.</span>` : ''}
+      <strong>${totalOk}</strong> por actualizar ·
+      <strong>${totalIg}</strong> sin cambio ·
+      <strong>${totalAmb}</strong> ambiguos ·
+      <strong>${totalNo}</strong> no encontrados ·
+      <strong>${totalErr}</strong> errores
     `;
 
-    document.getElementById('csvPreviewTbody').innerHTML = preview.slice(0, 300).map(item => {
+    document.getElementById('csvPreviewTbody').innerHTML = preview.slice(0,400).map((item, idx) => {
       const badge =
-        item.estado === 'ok' ? 'badge-ok' :
-        item.estado === 'igual' ? 'badge-neutral' :
-        item.estado === 'no' ? 'badge-warn' :
-        'badge-red';
+        item.estado==='ok'      ? 'badge-ok'      :
+        item.estado==='igual'   ? 'badge-neutral'  :
+        item.estado==='ambiguo' ? 'badge-warn'     :
+        item.estado==='no'      ? 'badge-off'      : 'badge-red';
 
-      return `
-        <tr class="trow">
-          <td class="pname">${escapeHtml(item.nombre)}</td>
-          <td>${escapeHtml(item.existenciaCsv)}</td>
-          <td>${escapeHtml(item.actual)}</td>
-          <td><span class="badge ${badge}">${escapeHtml(item.mensaje)}</span></td>
-        </tr>
-      `;
-    }).join('') || `<tr><td colspan="4" class="empty-row">No se encontraron filas válidas</td></tr>`;
+      const descCol = item.desc ? `<span style="font-size:11px;color:var(--txt3)"> · ${escapeHtml(item.desc)}</span>` : '';
+
+      // Para ambiguos: botón para asignar existencia a TODOS o seleccionar
+      const ambiguoExtra = item.estado==='ambiguo' ? `
+        <div style="margin-top:.3rem;font-size:11px;color:var(--txt3)">${escapeHtml(item.actual)}</div>
+        <button class="btn-csv-all" onclick="aplicarAmbiguo(${idx},${item.existenciaFinal})" style="margin-top:.3rem;padding:.25rem .6rem;font-size:11px;background:var(--tan);color:#111;border:none;border-radius:4px;cursor:pointer">
+          Actualizar todas las variantes (${item.candidatos.length})
+        </button>` : '';
+
+      return `<tr class="trow">
+        <td class="pname">${escapeHtml(item.nombre)}${descCol}${ambiguoExtra}</td>
+        <td>${item.existenciaCsv}</td>
+        <td>${escapeHtml(String(item.actual))}</td>
+        <td><span class="badge ${badge}">${escapeHtml(item.mensaje)}</span></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="4" class="empty-row">Sin filas válidas</td></tr>`;
 
     document.getElementById('csvPreviewWrap').style.display = 'block';
     document.getElementById('btnAplicarCsv').disabled = csvExistenciasPendientes.length === 0;
   };
-
   reader.readAsText(file, 'UTF-8');
 };
+
+// Aplicar ambiguo: actualiza TODAS las variantes del mismo nombre con la misma existencia
+window.aplicarAmbiguo = (idx, existencia) => {
+  const item = window._csvPreview[idx];
+  if(!item || item.estado !== 'ambiguo') return;
+  // Mover de ambiguo a ok para cada candidato
+  const nuevos = item.candidatos.map(c => ({
+    estado:'ok', id:c.id, nombre:item.nombre, desc:c.label,
+    existenciaCsv: existencia, actual: c.actual, mensaje:'Actualizar (todas variantes)'
+  }));
+  window._csvPreview.splice(idx, 1, ...nuevos);
+  csvExistenciasPendientes = window._csvPreview.filter(x=>x.estado==='ok');
+  // Re-renderizar solo esa fila como confirmada
+  const btn = document.querySelector(`button[onclick="aplicarAmbiguo(${idx},${existencia})"]`);
+  if(btn){
+    const row = btn.closest('tr');
+    if(row) row.style.background = 'rgba(46,125,69,.08)';
+    btn.textContent = `✓ ${item.candidatos.length} variantes marcadas`;
+    btn.disabled = true;
+  }
+  document.getElementById('btnAplicarCsv').disabled = csvExistenciasPendientes.length === 0;
+};
+
+// Función de similitud simple (Jaccard sobre trigramas)
+function similitud(a, b){
+  if(!a || !b) return 0;
+  if(a === b) return 1;
+  const trigrams = s => {
+    const set = new Set();
+    const p = ' '+s+' ';
+    for(let i=0;i<p.length-2;i++) set.add(p.slice(i,i+3));
+    return set;
+  };
+  const ta = trigrams(a), tb = trigrams(b);
+  let inter = 0;
+  ta.forEach(t => { if(tb.has(t)) inter++; });
+  return inter / (ta.size + tb.size - inter);
+}
 
 window.aplicarCsvExistencias = async () => {
   if(!csvExistenciasPendientes.length){
