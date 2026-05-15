@@ -87,6 +87,12 @@ function poblarCategorias() {
     categorias.map(c =>
       `<button class="filter-btn ${filtros.categoria===c.nombre?'active':''}" onclick="setFiltro('categoria','${c.nombre}')">${c.nombre}</button>`
     ).join('');
+  // Sincronizar botón Red Sale Outlet
+  const btnSale = document.getElementById('btnRedSale');
+  if(btnSale) {
+    btnSale.classList.toggle('active', filtros.categoria === 'RED SALE OUTLET');
+    btnSale.classList.toggle('active-sale', filtros.categoria === 'RED SALE OUTLET');
+  }
 }
 
 function poblarColores() {
@@ -297,7 +303,8 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
   width:100%;
 }
 .hero-logo-wrap{margin-bottom:1rem}
-.hero-logo{height:56px;width:auto;display:block;margin:0 auto}
+.hero-logo{height:56px;width:auto;display:block;margin:0 auto;transition:opacity .2s,transform .2s;cursor:pointer}
+.hero-logo-wrap a:hover .hero-logo{opacity:.8;transform:scale(.97)}
 .hero-tagline{
   display:flex;align-items:center;justify-content:center;
   gap:.5rem;flex-wrap:wrap;
@@ -397,8 +404,11 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
   border-radius:20px;color:var(--txt2);font-family:var(--f);font-size:12px;
   font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;
 }
-.filter-btn:hover{border-color:var(--txt);color:var(--txt)}
-.filter-btn.active{background:var(--txt);border-color:var(--txt);color:#fff}
+.filter-btn-sale{border-color:transparent;padding:.15rem .3rem;background:transparent}
+.filter-btn-sale:hover{border-color:transparent;background:transparent;opacity:.85;transform:scale(.97)}
+.filter-btn-sale.active,.filter-btn-sale.active-sale{background:transparent;border-color:transparent;opacity:1;transform:scale(.97)}
+.sale-img{height:28px;width:auto;display:block;transition:opacity .15s,transform .15s}
+.sale-fallback{font-weight:700;font-size:11.5px;letter-spacing:.04em;display:none;color:#B41E1E}
 
 /* ── MAIN ── */
 .main{max-width:1280px;margin:0 auto;padding:1.4rem}
@@ -536,19 +546,15 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
   <div class="hero-overlay"></div>
   <div class="hero-content">
     <div class="hero-logo-wrap">
-      <img src="logo%20dizzeno%20blanco.png" alt="Dizzeño Art Glass" class="hero-logo"
-        onerror="this.style.display='none'">
+      <a href="https://dizzeno.com" title="Ir a dizzeno.com" style="display:block;line-height:0">
+        <img src="logo%20dizzeno%20blanco.png" alt="Dizzeño Art Glass" class="hero-logo"
+          onerror="this.style.display='none'">
+      </a>
     </div>
     <div class="hero-tagline">
       <span id="heroTexto1">VIDRIO SOPLADO · HECHO A MANO · TONALÁ, JALISCO</span>
       <span class="ticker-dot">·</span>
       <span id="heroTexto2">STOCK EN TIEMPO REAL · ENVÍOS A TODO MÉXICO</span>
-    </div>
-    <div class="hero-cta-wrap">
-      <a href="https://dizzeno.com" class="btn-hero-shop">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="13" height="13"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        Visitar dizzeno.com
-      </a>
     </div>
   </div>
   <!-- TICKER -->
@@ -614,7 +620,15 @@ body{font-family:var(--f);background:var(--bg);color:var(--txt);min-height:100vh
 <!-- CATEGORÍAS -->
 <div class="cats-wrap">
   <span class="cats-label">Colección</span>
-  <div id="filtrosCats" style="display:flex;gap:.4rem;flex-wrap:wrap"></div>
+  <div id="filtrosCats" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center"></div>
+  <!-- RED SALE OUTLET — reemplaza red-sale-outlet.png con tu imagen cuando la tengas -->
+  <button class="filter-btn filter-btn-sale ${filtros.categoria==='RED SALE OUTLET'?'active-sale':''}"
+    onclick="setFiltro('categoria','RED SALE OUTLET')"
+    id="btnRedSale">
+    <img src="red-sale-outlet.png" alt="Red Sale Outlet" class="sale-img"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+    <span class="sale-fallback">🔴 RED SALE OUTLET</span>
+  </button>
 </div>
 
 <!-- CATÁLOGO -->
