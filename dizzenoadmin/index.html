@@ -1365,6 +1365,136 @@ window.aplicarCsvExistencias = async () => {
   btn.textContent = 'Aplicar actualización';
 };
 
+// ── IMPORTAR PRODUCTOS NUEVOS DESDE CSV ────────────────────────────────────
+let csvNuevosPreview = [];
+
+window.openImportarNuevosModal = () => {
+  csvNuevosPreview = [];
+  document.getElementById('importNuevosFile').value = '';
+  document.getElementById('importNuevosResumen').textContent = '';
+  document.getElementById('importNuevosTbody').innerHTML = '';
+  document.getElementById('importNuevosPreviewWrap').style.display = 'none';
+  document.getElementById('btnAplicarNuevos').disabled = true;
+  document.getElementById('importNuevosModal').classList.add('open');
+};
+
+window.closeImportarNuevosModal = () => {
+  document.getElementById('importNuevosModal').classList.remove('open');
+};
+
+window.procesarCsvNuevos = input => {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const rows = parseCsvText(e.target.result);
+    const headerIndex = rows.findIndex(row =>
+      row.some(cell => normalizarTexto(cell) === 'nombre del producto')
+    );
+    if(headerIndex === -1){ alert('No encontré la columna "Nombre del Producto".'); return; }
+
+    const headers = rows[headerIndex].map(normalizarTexto);
+    const idxNombre     = headers.indexOf('nombre del producto');
+    const idxExistencia = headers.findIndex(h => h.includes('existencia'));
+    const idxCategoria  = headers.findIndex(h => h.includes('categor'));
+    const idxDesc       = headers.findIndex(h => h.includes('descripci'));
+
+    // Índice de nombres ya existentes en Firebase
+    const nombresExistentes = new Set(productos.map(p => normalizarTexto(p.nombre)));
+
+    csvNuevosPreview = [];
+    const vistos = new Set();
+
+    rows.slice(headerIndex + 1).forEach(row => {
+      const nombre    = (row[idxNombre]     || '').trim();
+      const categoria = idxCategoria >= 0 ? (row[idxCategoria] || '').trim() : '';
+      const desc      = idxDesc      >= 0 ? (row[idxDesc]      || '').trim() : '';
+      const existRaw  = idxExistencia >= 0 ? (row[idxExistencia] || '').toString().trim() : '0';
+
+      if(!nombre) return;
+
+      const key = normalizarTexto(nombre) + '|||' + normalizarTexto(categoria);
+      if(vistos.has(key)) return;
+      vistos.add(key);
+
+      const existencia = parseInt(existRaw.replace(/[^\d]/g,''), 10) || 0;
+      const yaExiste   = nombresExistentes.has(normalizarTexto(nombre));
+
+      csvNuevosPreview.push({ nombre, categoria, desc, existencia, yaExiste });
+    });
+
+    const nuevos    = csvNuevosPreview.filter(x => !x.yaExiste);
+    const existente = csvNuevosPreview.filter(x => x.yaExiste);
+
+    document.getElementById('importNuevosResumen').innerHTML =
+      `<strong>${nuevos.length}</strong> productos nuevos por crear · ` +
+      `<strong>${existente.length}</strong> ya existen en Firebase (se omitirán)`;
+
+    document.getElementById('importNuevosTbody').innerHTML = csvNuevosPreview.map(item => `
+      <tr class="trow">
+        <td class="pname">${escapeHtml(item.nombre)}</td>
+        <td style="font-size:12px;color:var(--txt2)">${escapeHtml(item.categoria)}</td>
+        <td>${item.existencia}</td>
+        <td><span class="badge ${item.yaExiste?'badge-neutral':'badge-ok'}">${item.yaExiste?'Ya existe':'Nuevo'}</span></td>
+      </tr>`).join('') || `<tr><td colspan="4" class="empty-row">Sin filas válidas</td></tr>`;
+
+    document.getElementById('importNuevosPreviewWrap').style.display = 'block';
+    document.getElementById('btnAplicarNuevos').disabled = nuevos.length === 0;
+  };
+  reader.readAsText(file, 'UTF-8');
+};
+
+window.aplicarImportarNuevos = async () => {
+  const nuevos = csvNuevosPreview.filter(x => !x.yaExiste);
+  if(!nuevos.length){ alert('No hay productos nuevos para crear.'); return; }
+  if(!confirm(`¿Crear ${nuevos.length} productos nuevos en Firebase?`)) return;
+
+  const btn = document.getElementById('btnAplicarNuevos');
+  btn.disabled = true; btn.textContent = 'Creando...';
+
+  try {
+    const chunks = [];
+    for(let i=0; i<nuevos.length; i+=400) chunks.push(nuevos.slice(i,i+400));
+
+    let total = 0;
+    for(const chunk of chunks){
+      const batch = writeBatch(db);
+      chunk.forEach(item => {
+        const ref = doc(collection(db,"productos"));
+        batch.set(ref, {
+          nombre:      item.nombre,
+          categoria:   item.categoria,
+          descripcion: item.desc,
+          existencias: item.existencia,
+          color:       '',
+          fotoUrl:     '',
+          urlShopify:  '',
+          precio:      '',
+          barrenado:   false,
+          disponible:  true,
+          notas:       '',
+          esJuego:     false,
+          piezasJuego: 0,
+          camposExtra: {},
+          createdAt:   serverTimestamp(),
+          updatedAt:   serverTimestamp(),
+        });
+        total++;
+      });
+      await batch.commit();
+      btn.textContent = `Creando... ${total}/${nuevos.length}`;
+    }
+
+    registrarBitacora('alta', `Importación CSV — ${total} productos nuevos`, total);
+    alert(`¡Listo! Se crearon ${total} productos nuevos. Ahora puedes editar cada uno para agregar foto y link de Shopify.`);
+    window.closeImportarNuevosModal();
+
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+
+  btn.disabled = false; btn.textContent = 'Crear productos';
+};
+
 // ── NAV ────────────────────────────────────────────────────────────────────
 // Exponer renderProductosColeccion para uso desde HTML
 window.renderProductosColeccion = renderProductosColeccion;
@@ -1686,7 +1816,11 @@ thead th{padding:.65rem .8rem;text-align:left;font-size:9px;letter-spacing:.16em
       <div class="sec active" id="sec_inventario">
         <div class="ph">
           <div><div class="ph-title">Inventario</div><div class="ph-sub">Productos en tiempo real — Dizzeño Art Glass</div></div>
-          <div class="ph-actions"><button class="btn-new perm-editor" onclick="openCsvModal()">Subir CSV existencias</button><button class="btn-new perm-editor" onclick="openNew()">+ Nuevo producto</button></div>
+          <div class="ph-actions">
+            <button class="btn-new perm-editor" onclick="openNew()">+ Nuevo producto</button>
+            <button class="btn-new" style="background:var(--bg2);border:1px solid var(--bdr);color:var(--txt2)" onclick="openCsvModal()">↑ CSV existencias</button>
+            <button class="btn-new" style="background:#B41E1E;color:#fff" onclick="openImportarNuevosModal()">↑ Importar nuevos</button>
+          </div>
         </div>
 
         <div class="stats">
@@ -2193,5 +2327,41 @@ document.getElementById('masivaAccion').addEventListener('change', function(){
   document.getElementById('masivaNuevaCat').style.display = this.value==='categoria'?'block':'none';
 });
 </script>
+<!-- MODAL: IMPORTAR PRODUCTOS NUEVOS -->
+<div class="modal-bg" id="importNuevosModal">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title">Importar productos nuevos desde CSV</div>
+        <div class="modal-head-sub">Crea productos que aún no existen en Firebase. Los que ya existen se omiten.</div>
+      </div>
+      <button class="btn-close" onclick="closeImportarNuevosModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box" style="margin-bottom:1rem">
+        El archivo debe tener las columnas <strong>Nombre del Producto</strong>, <strong>Categoría</strong> y <strong>Existencia</strong>.<br>
+        Formato esperado: igual al CSV del inventario de Dizzeño.
+      </div>
+      <div class="form-group">
+        <label>Archivo CSV</label>
+        <input type="file" id="importNuevosFile" accept=".csv" onchange="procesarCsvNuevos(this)" style="padding:.45rem">
+      </div>
+      <div id="importNuevosResumen" style="font-size:13px;color:var(--txt2);margin-bottom:.8rem"></div>
+      <div id="importNuevosPreviewWrap" style="display:none">
+        <div class="tbl-wrap" style="max-height:360px;overflow-y:auto">
+          <table>
+            <thead><tr><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Estado</th></tr></thead>
+            <tbody id="importNuevosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeImportarNuevosModal()">Cancelar</button>
+      <button class="btn-save" id="btnAplicarNuevos" onclick="aplicarImportarNuevos()" disabled style="background:#B41E1E">Crear productos</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
